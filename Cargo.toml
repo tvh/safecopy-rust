@@ -5,3 +5,4 @@ authors = ["Timo von Holtz <tvh@tvholtz.de>"]
 
 [dependencies]
 nom = "^3.2"
+bincode = "^0.9"

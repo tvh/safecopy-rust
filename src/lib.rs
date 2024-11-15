@@ -319,4 +319,56 @@ mod tests {
         let x = Cow::Borrowed(&x_raw);
         serialize_deserialize(&x)
     }
+
+    #[derive(Debug, PartialEq)]
+    struct T1(i32);
+    impl SafeCopy for T1 {
+        type K = Base;
+        const VERSION: i32 = 0;
+        fn parse_unsafe<R: Read>(reader: &mut R) -> Result<Self> {
+            Ok(T1(safe_parse(reader)?))
+        }
+        fn write_unsafe<W: Write>(writer: &mut W, value: &Self) -> Result<()> {
+            safe_write(writer, &value.0)
+        }
+    }
+
+    #[derive(Debug, PartialEq)]
+    struct T2(i32, Option<String>);
+    impl SafeCopy for T2 {
+        type K = Extended<T1>;
+        const VERSION: i32 = 1;
+        fn parse_unsafe<R: Read>(reader: &mut R) -> Result<Self> {
+            Ok(T2(safe_parse(reader)?, safe_parse(reader)?))
+        }
+        fn write_unsafe<W: Write>(writer: &mut W, value: &Self) -> Result<()> {
+            safe_write(writer, &value.0)?;
+            safe_write(writer, &value.1)
+        }
+    }
+
+    impl From<T1> for T2 {
+        fn from(t: T1) -> Self {
+            T2(t.0, None)
+        }
+    }
+
+    #[quickcheck]
+    fn prop_custom(i: i32, s: Option<String>) -> TestResult {
+        let t1 = T1(i);
+        let mut buffer = Vec::new();
+        safe_write(&mut buffer, &t1).unwrap();
+        let mut cursor = std::io::Cursor::new(buffer);
+        let t2: Result<T2> = safe_parse(&mut cursor);
+        match t2 {
+            Ok(t2) => {
+                if t2 != T2(i, None) {
+                    return TestResult::error(format!("Expected {:?}, got {:?}", T2(i, None), t2));
+                }
+            }
+            Err(e) => return TestResult::error(format!("Error: {:?}", e)),
+        }
+        let t2 = T2(i, s);
+        serialize_deserialize(&t2)
+    }
 }

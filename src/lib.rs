@@ -2,7 +2,7 @@ extern crate bincode;
 
 use bincode::*;
 use std::boxed::Box;
-use std::convert::From;
+use std::convert::{From, TryInto};
 use std::io::{Read, Write};
 use std::marker::Sized;
 
@@ -110,6 +110,75 @@ impl SafeCopy for i64 {
     }
 }
 
+impl SafeCopy for String {
+    type K = Primitive;
+    const VERSION: i32 = 0;
+
+    fn parse_unsafe<R: Read>(reader: &mut R) -> Result<Self> {
+        let len: usize = deserialize_from(reader, Infinite)?;
+        let mut buf = Vec::with_capacity(len);
+        reader.take(len as u64).read_to_end(&mut buf)?;
+        Ok(String::from_utf8(buf)
+            // FIXME: Enable more error types
+            .unwrap())
+    }
+
+    fn write_unsafe<W: Write>(writer: &mut W, value: &Self) -> Result<()> {
+        let bytes = value.as_bytes();
+        serialize_into(writer, &bytes.len(), Infinite)?;
+        writer.write_all(bytes)?;
+        Ok(())
+    }
+}
+
+impl<T: SafeCopy> SafeCopy for Option<T> {
+    type K = Primitive;
+    const VERSION: i32 = 0;
+
+    fn parse_unsafe<R: Read>(reader: &mut R) -> Result<Self> {
+        let tag: u8 = deserialize_from(reader, Infinite)?;
+        match tag {
+            0 => Ok(None),
+            1 => Ok(Some(safe_parse(reader)?)),
+            _ => Err(Box::new(ErrorKind::Custom(String::from("Wrong tag")))),
+        }
+    }
+
+    fn write_unsafe<W: Write>(writer: &mut W, value: &Self) -> Result<()> {
+        match value {
+            None => serialize_into(writer, &0u8, Infinite)?,
+            Some(x) => {
+                serialize_into(writer, &1u8, Infinite)?;
+                safe_write(writer, x)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<T: SafeCopy> SafeCopy for Vec<T> {
+    type K = Primitive;
+    const VERSION: i32 = 0;
+
+    fn parse_unsafe<R: Read>(reader: &mut R) -> Result<Self> {
+        let len: u64 = deserialize_from(reader, Infinite)?;
+        let mut result = Vec::with_capacity(len.try_into().unwrap());
+        for _ in 0..len {
+            result.push(safe_parse(reader)?);
+        }
+        Ok(result)
+    }
+
+    fn write_unsafe<W: Write>(writer: &mut W, value: &Self) -> Result<()> {
+        let len: u64 = value.len().try_into().unwrap();
+        serialize_into(writer, &len, Infinite)?;
+        for x in value {
+            safe_write(writer, x)?;
+        }
+        Ok(())
+    }
+}
+
 pub fn safe_parse<A: SafeCopy>(reader: &mut impl Read) -> Result<A> {
     A::K::safe_parse(reader)
 }
@@ -136,7 +205,7 @@ mod tests {
                 } else {
                     TestResult::error(format!("Expected {:?}, got {:?}", value, x))
                 }
-            },
+            }
             Err(e) => TestResult::error(format!("Error: {:?}", e)),
         }
     }
@@ -148,6 +217,21 @@ mod tests {
 
     #[quickcheck]
     fn i64(x: i64) -> TestResult {
+        serialize_deserialize(&x)
+    }
+
+    #[quickcheck]
+    fn string(x: String) -> TestResult {
+        serialize_deserialize(&x)
+    }
+
+    #[quickcheck]
+    fn option(x: Option<i32>) -> TestResult {
+        serialize_deserialize(&x)
+    }
+
+    #[quickcheck]
+    fn vec(x: Vec<i32>) -> TestResult {
         serialize_deserialize(&x)
     }
 }

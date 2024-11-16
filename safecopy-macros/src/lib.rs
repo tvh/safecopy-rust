@@ -1,7 +1,10 @@
 extern crate proc_macro;
-use proc_macro::TokenStream;
+use std::fmt::format;
+
+use proc_macro::{TokenStream};
+use proc_macro2::{Span};
 use quote::quote;
-use syn::DeriveInput;
+use syn::{DeriveInput, Ident};
 
 #[proc_macro_derive(SafeCopy)]
 pub fn derive_safecopy(input: TokenStream) -> TokenStream {
@@ -55,14 +58,46 @@ pub fn derive_safecopy(input: TokenStream) -> TokenStream {
                 },
             ),
         },
-        syn::Data::Enum(data_enum) => (
+        syn::Data::Enum(data_enum) => {
+            let match_arms = data_enum
+                .variants
+                .iter()
+                .enumerate()
+                .map(|(i_large,variant)| {
+                    let variant_name = &variant.ident;
+                    let i: i16 = i_large as i16;
+                    match &variant.fields {
+                        syn::Fields::Named(fields_named) => todo!("Enum: Named"),
+                        syn::Fields::Unnamed(fields_unnamed) => {
+                            let field_count = fields_unnamed.unnamed.len();
+                            let field_names = (0..field_count)
+                                .map(|i| Ident::new(format!("value{}", i).as_str(), Span::call_site()))
+                                .collect::<Vec<_>>();
+                            
+                            quote! {
+                                #name::#variant_name(#(#field_names),*) => {
+                                    serialize_into(writer, &#i, Infinite)?;
+                                    #(serialize_into(writer, #field_names, Infinite)?;)*
+                                },
+                            }
+                        },
+                        syn::Fields::Unit => quote! {
+                            #name::#variant_name => serialize_into(writer, &#i, Infinite)?,
+                        },
+                    }
+                })
+                .collect::<Vec<_>>();
+            (
             quote! {
                 todo!("Enum: parse")
             },
             quote! {
-                todo!("Enum: write")
+                match value {
+                    #(#match_arms)*
+                }
+                Ok(())
             },
-        ),
+        )},
         syn::Data::Union(_data_union) => {
             panic!("Unions are not supported");
         }

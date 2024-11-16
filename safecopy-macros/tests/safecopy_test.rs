@@ -24,11 +24,65 @@ fn serialize_deserialize<A: SafeCopy + std::fmt::Debug + PartialEq>(value: &A) -
 }
 
 #[quickcheck]
-fn test_single_value(x: i32) -> TestResult {
+fn test_unit() -> TestResult {
+    #[derive(SafeCopy, Debug, PartialEq)]
+    struct Test;
+
+    serialize_deserialize(&Test)
+}
+
+#[quickcheck]
+fn test_named_single_value(x: i32) -> TestResult {
     #[derive(SafeCopy, Debug, PartialEq)]
     struct Test {
         a: i32,
     }
 
     serialize_deserialize(&Test { a: x })
+}
+
+#[quickcheck]
+fn test_unnamed_single_value(x: i32) -> TestResult {
+    #[derive(SafeCopy, Debug, PartialEq)]
+    struct Test(i32);
+
+    serialize_deserialize(&Test(x))
+}
+
+#[quickcheck]
+fn test_enum_without_value(x: i32) -> TestResult {
+    #[derive(SafeCopy, Debug, PartialEq)]
+    enum Test {
+        A,
+        B,
+        C,
+    }
+
+    let test = match x % 3 {
+        0 => Test::A,
+        1 => Test::B,
+        2 => Test::C,
+        _ => panic!("Invalid value"),
+    };
+
+    serialize_deserialize(&test)
+}
+
+#[quickcheck]
+fn test_enum_with_value(x: i32, variant: u8) -> TestResult {
+    #[derive(SafeCopy, Debug, PartialEq)]
+    enum Test {
+        A(i32),
+        B(i32),
+        C(i32),
+    }
+
+    let test = match variant % 3 {
+        0 => Test::A(x),
+        1 => Test::B(x),
+        2 => Test::C(x),
+        _ => panic!("Invalid value"),
+    };
+
+    serialize_deserialize(&test)
 }

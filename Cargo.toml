@@ -1,12 +1,5 @@
-[package]
-name = "safecopy"
-version = "0.1.0"
-authors = ["Timo von Holtz <tvh@tvholtz.de>"]
+[workspace]
 
-[dependencies]
-bincode = "^0.9"
-serde = "^1.0"
-
-[dev-dependencies]
-quickcheck = "1"
-quickcheck_macros = "1"
+members = [
+    "safecopy", "safecopy-macros",
+]

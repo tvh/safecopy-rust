@@ -1,0 +1,18 @@
+[package]
+name = "safecopy-macros"
+version = "0.1.0"
+edition = "2021"
+authors = ["Timo von Holtz <tvh@tvholtz.de>"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+safecopy = { path = "../safecopy" }
+syn = "2.0"
+quote = "1.0"
+bincode = "^0.9"
+
+[dev-dependencies]
+quickcheck = "1"
+quickcheck_macros = "1"
